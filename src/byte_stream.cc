@@ -8,7 +8,7 @@ ByteStream::ByteStream( uint64_t capacity ) : capacity_( capacity ) {}
 void Writer::push( string data ) noexcept
 {
   auto len = min( data.size(), available_capacity() ); // 确定可写入的数据长度
-  if ( len == 0 ) {                                    // 如果可写入的数据长度为0，说明已经写满了，返回
+  if ( len == 0 ) { // 如果可写入的数据长度为0，说明已经写满了，返回
     return;
   } else if ( len < data.size() ) { // 如果可写入的数据长度小于 data 的长度，说明只能写入部分数据
     data.resize( len );             // 将 data 的长度截断为可写入的长度
