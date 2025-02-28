@@ -33,6 +33,7 @@ public:
   const Reader& reader() const;
   Writer& writer();
   const Writer& writer() const;
+  uint64_t get_capacity() { return capacity_; }
 
   void set_error() { error_ = true; }
   bool has_error() const { return error_; }

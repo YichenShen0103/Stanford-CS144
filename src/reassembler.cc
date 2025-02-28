@@ -1,63 +1,80 @@
 #include "reassembler.hh"
-#include "debug.hh"
-#include <algorithm>
 
 using namespace std;
 
-void Reassembler::update()
+void Reassembler::insert( uint64_t first_index, string data, bool is_last_substring )
 {
-  // 拼接连续字节
-  string to_push;
-  auto it = buffer_.find( next_byte_ );
-  while ( it != buffer_.end() ) {
-    to_push.push_back( it->second );
-    buffer_.erase( it );
-    ++next_byte_;
-    it = buffer_.find( next_byte_ ); // 仅在循环末尾查找
-  }
-  output_.writer().push( to_push );
+  uint64_t wd_start = nxt_expected_idx_;
+  uint64_t wd_end = wd_start + output_.writer().available_capacity();
+  uint64_t cur_start = first_index;
+  uint64_t cur_end = cur_start + data.size();
 
-  // 如果已经标记了最后一段且 buffer_ 已无剩余，关闭写入
-  if ( next_byte_ == end_.second && end_.first ) {
+  // set the eof index of this reassembling
+  if ( is_last_substring ) {
+    eof_idx_ = cur_end;
+  }
+
+  if ( cur_start >= wd_end ) {
+    return;
+  }
+
+  uint64_t start_idx = max( wd_start, cur_start );
+  uint64_t end_idx = min( wd_end, cur_end );
+  if ( start_idx >= end_idx ) {
+    if ( nxt_expected_idx_ == eof_idx_ ) {
+      output_.writer().close();
+    }
+    return;
+  }
+  uint64_t len = end_idx - start_idx;
+
+  // insert the current data
+  buf_.insert( { start_idx, end_idx, data.substr( start_idx - first_index, len ) } );
+
+  // handle the overlapping of intervals
+  std::vector<Interval> merged;
+  auto it = buf_.begin();
+  Interval last = *it;
+  it++;
+
+  while ( it != buf_.end() ) {
+    if ( it->start <= last.end ) {
+      if ( last.end < it->end ) {
+        last.end = it->end;
+        last.data = last.data.substr( 0, it->start - last.start ) + it->data;
+      }
+    } else {
+      merged.push_back( last );
+      last = *it;
+    }
+    it++;
+  }
+  merged.push_back( last );
+
+  buf_.clear();
+  for ( const auto& interval : merged ) {
+    buf_.insert( interval );
+  }
+
+  // push when it ready
+  it = buf_.begin();
+  while ( it->start == nxt_expected_idx_ ) {
+    output_.writer().push( it->data );
+    nxt_expected_idx_ = it->end;
+    it = buf_.erase( it );
+  }
+
+  // close when all bytes are pushed
+  if ( nxt_expected_idx_ == eof_idx_ ) {
     output_.writer().close();
   }
 }
 
-void Reassembler::insert( uint64_t first_index, string data, bool is_last_substring )
-{
-  debug( "insert({}, {}, {}) called", first_index, data.size(), is_last_substring );
-
-  if ( is_last_substring ) {
-    end_.first = true;
-    end_.second = first_index + data.size();
-  }
-
-  // 根据当前可写容量，计算能接受的最大下标
-  uint64_t max_index = output_.writer().available_capacity() + next_byte_;
-  uint64_t last_index = first_index + data.size();
-  uint64_t init = first_index;
-
-  // 截断超出可用容量的数据
-  if ( last_index > max_index ) {
-    last_index = max_index;
-  }
-
-  // 跳过已经写入（next_byte_ 之前）的数据
-  if ( first_index < next_byte_ ) {
-    first_index = next_byte_;
-  }
-
-  // 将有效区间 [first_index, last_index) 的数据拷贝到 buffer_
-  for ( uint64_t idx = first_index; idx < last_index; ++idx ) {
-    buffer_[idx] = data[idx - init];
-  }
-
-  // 尝试更新可连续写入的内容
-  update();
-}
-
 uint64_t Reassembler::count_bytes_pending() const
 {
-  // 返回当前缓冲区里尚未写入 ByteStream 的字节数
-  return buffer_.size();
+  uint64_t pendcnt = 0;
+  for ( const auto& interval : buf_ ) {
+    pendcnt += interval.end - interval.start;
+  }
+  return pendcnt;
 }
