@@ -1,14 +1,18 @@
 #pragma once
 
 #include "byte_stream.hh"
-#include <map>
+#include <unordered_map>
 
 class Reassembler
 {
 public:
   // Construct Reassembler to write into given ByteStream.
   explicit Reassembler( ByteStream&& output )
-    : output_( std::move( output ) ), buffer_( std::map<uint64_t, char>() ), next_byte_( 0 ), buffer_start_( 0 )
+    : output_( std::move( output ) )
+    , buffer_( std::unordered_map<uint64_t, char>() )
+    , next_byte_( 0 )
+    , buffer_start_( 0 )
+    , end_( std::make_pair( false, 0 ) )
   {}
 
   /*
@@ -46,9 +50,9 @@ public:
 
 private:
   ByteStream output_;
-  std::map<uint64_t, char> buffer_;
+  std::unordered_map<uint64_t, char> buffer_;
   uint64_t next_byte_, buffer_start_;
-  bool end_ = false;
+  std::pair<bool, uint64_t> end_;
 
   void update();
 };

@@ -1,51 +1,63 @@
 #include "reassembler.hh"
 #include "debug.hh"
+#include <algorithm>
 
 using namespace std;
 
 void Reassembler::update()
 {
-  if ( buffer_start_ != next_byte_ )
-    return;
-  std::string to_push = "";
-  while ( buffer_.find( next_byte_ ) != buffer_.end() ) {
-    to_push.push_back( buffer_[next_byte_] );
-    buffer_.erase( next_byte_ );
-    next_byte_++;
+  // 拼接连续字节
+  string to_push;
+  auto it = buffer_.find( next_byte_ );
+  while ( it != buffer_.end() ) {
+    to_push.push_back( it->second );
+    buffer_.erase( it );
+    ++next_byte_;
+    it = buffer_.find( next_byte_ ); // 仅在循环末尾查找
   }
   output_.writer().push( to_push );
-  debug( "update called" );
+
+  // 如果已经标记了最后一段且 buffer_ 已无剩余，关闭写入
+  if ( next_byte_ == end_.second && end_.first ) {
+    output_.writer().close();
+  }
 }
 
 void Reassembler::insert( uint64_t first_index, string data, bool is_last_substring )
 {
-  debug( "unimplemented insert({}, {}, {}) called", first_index, data, is_last_substring );
-  if ( is_last_substring )
-    end_ = true;
-  uint64_t max_index = output_.writer().available_capacity() + next_byte_;
-  uint64_t last_index = first_index + data.length();
-  uint64_t init = first_index;
-  if ( first_index < next_byte_ )
-    first_index = next_byte_;
-  if ( last_index > max_index )
-    last_index = max_index;
-  if ( first_index < buffer_start_ )
-    buffer_start_ = first_index;
+  debug( "insert({}, {}, {}) called", first_index, data.size(), is_last_substring );
 
-  while ( first_index < last_index ) {
-    buffer_[first_index] = data[first_index - init];
-    first_index++;
+  if ( is_last_substring ) {
+    end_.first = true;
+    end_.second = first_index + data.size();
   }
 
+  // 根据当前可写容量，计算能接受的最大下标
+  uint64_t max_index = output_.writer().available_capacity() + next_byte_;
+  uint64_t last_index = first_index + data.size();
+  uint64_t init = first_index;
+
+  // 截断超出可用容量的数据
+  if ( last_index > max_index ) {
+    last_index = max_index;
+  }
+
+  // 跳过已经写入（next_byte_ 之前）的数据
+  if ( first_index < next_byte_ ) {
+    first_index = next_byte_;
+  }
+
+  // 将有效区间 [first_index, last_index) 的数据拷贝到 buffer_
+  for ( uint64_t idx = first_index; idx < last_index; ++idx ) {
+    buffer_[idx] = data[idx - init];
+  }
+
+  // 尝试更新可连续写入的内容
   update();
-  if ( end_ )
-    output_.writer().close();
 }
 
-// How many bytes are stored in the Reassembler itself?
-// This function is for testing only; don't add extra state to support it.
 uint64_t Reassembler::count_bytes_pending() const
 {
-  // debug( "unimplemented count_bytes_pending() called" );
-  return {};
+  // 返回当前缓冲区里尚未写入 ByteStream 的字节数
+  return buffer_.size();
 }
