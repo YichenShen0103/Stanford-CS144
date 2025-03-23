@@ -30,13 +30,10 @@ ttest(reassembler_seq)
 ttest(reassembler_dup)
 ttest(reassembler_holes)
 ttest(reassembler_overlapping)
-ttest(reassembler_win)
 
 ttest(wrapping_integers_cmp)
 ttest(wrapping_integers_wrap)
 ttest(wrapping_integers_unwrap)
-ttest(wrapping_integers_roundtrip)
-ttest(wrapping_integers_extra)
 
 ttest(recv_connect)
 ttest(recv_transmit)

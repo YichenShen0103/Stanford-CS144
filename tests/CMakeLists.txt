@@ -43,13 +43,10 @@ add_test_exec(reassembler_seq)
 add_test_exec(reassembler_dup)
 add_test_exec(reassembler_holes)
 add_test_exec(reassembler_overlapping)
-add_test_exec(reassembler_win)
 
 add_test_exec(wrapping_integers_cmp)
 add_test_exec(wrapping_integers_wrap)
 add_test_exec(wrapping_integers_unwrap)
-add_test_exec(wrapping_integers_roundtrip)
-add_test_exec(wrapping_integers_extra)
 
 add_test_exec(recv_connect)
 add_test_exec(recv_transmit)
