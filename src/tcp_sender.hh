@@ -4,14 +4,34 @@
 #include "tcp_receiver_message.hh"
 #include "tcp_sender_message.hh"
 
+#include <cstdint>
 #include <functional>
+#include <queue>
+#include <utility>
+
+class RetransmissionTimer
+{
+public:
+  RetransmissionTimer( uint64_t initial_ROT_ms ) : RTO_( initial_ROT_ms ) {}
+  bool is_expired() const noexcept { return is_active_ && time_passed_ >= RTO_; }
+  bool is_active() const noexcept { return is_active_; }
+  RetransmissionTimer& active() noexcept;
+  RetransmissionTimer& timeout() noexcept;
+  RetransmissionTimer& reset() noexcept;
+  RetransmissionTimer& tick( uint64_t ms_since_last_tick ) noexcept;
+
+private:
+  uint64_t RTO_;
+  uint64_t time_passed_ {};
+  bool is_active_ {};
+};
 
 class TCPSender
 {
 public:
   /* Construct TCP sender with given default Retransmission Timeout and possible ISN */
   TCPSender( ByteStream&& input, Wrap32 isn, uint64_t initial_RTO_ms )
-    : input_( std::move( input ) ), isn_( isn ), initial_RTO_ms_( initial_RTO_ms )
+    : input_( std::move( input ) ), isn_( isn ), initial_RTO_ms_( initial_RTO_ms ), timer_( initial_RTO_ms_ )
   {}
 
   /* Generate an empty TCPSenderMessage */
@@ -37,9 +57,22 @@ public:
   Writer& writer() { return input_.writer(); }
 
 private:
+  TCPSenderMessage make_message( uint64_t seqno, std::string payload, bool SYN, bool FIN = false ) const;
+
   Reader& reader() { return input_.reader(); }
 
   ByteStream input_;
   Wrap32 isn_;
   uint64_t initial_RTO_ms_;
+
+  uint16_t wnd_size_ { 1 };
+  uint64_t next_seqno_ {};
+  uint64_t acked_seqno_ {};
+  bool syn_flag_ {}, fin_flag_ {}, sent_syn_ {}, sent_fin_ {};
+
+  RetransmissionTimer timer_;
+  uint64_t retransmission_cnt_ {};
+
+  std::queue<TCPSenderMessage> outstanding_bytes_ {};
+  uint64_t num_bytes_in_flight_ {};
 };
